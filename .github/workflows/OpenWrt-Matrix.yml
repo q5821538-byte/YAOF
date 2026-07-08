@@ -116,7 +116,7 @@ jobs:
           if [ "$name_lower" = "x86" ]; then
             ext4_zip='*ext4-combined*'
             sfs_zip='*squashfs-combined*'
-            sysupgrade_glob='*combined-efi.img*'
+            sysupgrade_glob='*combined*.img*'
           else
             ext4_zip="*$name_lower*ext4*"
             sfs_zip="*$name_lower*squashfs*"
@@ -192,6 +192,17 @@ jobs:
           /bin/bash 02_target_only.sh
           /bin/bash 04_remove_upx.sh
 
+      - name: Remove broken shortcut-fe kernel patch
+        working-directory: ${{ github.workspace }}/openwrt
+        run: |
+          set -e
+          echo "Removing broken shortcut-fe kernel patch for Linux 6.12..."
+          find target/linux -type f \( \
+            -name '*shortcut-fe*.patch' -o \
+            -name '953-net-patch-linux-kernel-to-support-shortcut-fe.patch' \
+          \) -print -delete || true
+          echo "shortcut-fe patch cleanup done."
+
       - name: QTMDFW4
         working-directory: ${{ github.workspace }}/openwrt
         run: |
@@ -260,7 +271,8 @@ jobs:
           if [ "${{ inputs.upload_source }}" = "true" ] && [ -f ../${{ env.openwrt_source_name }} ]; then
             rm ../${{ env.openwrt_source_name }}
           fi
-          make download -j50
+          make download -j50 || make download -j1 V=s
+          find dl -size -1024c -exec rm -f {} \; || true
           make -j$(($(nproc) + 1)) package/network/utils/nftables/refresh V=s
 
       # build_firmware
@@ -268,17 +280,8 @@ jobs:
         if: inputs.build_firmware
         working-directory: ${{ github.workspace }}/openwrt
         id: compileopenwrt
-        continue-on-error: true
         run: |
-          IGNORE_ERRORS=1 make -j$(($(nproc) + 1))
-          echo $?
-      - name: If Error
-        if: steps.compileopenwrt.outcome == 'failure'
-        working-directory: ${{ github.workspace }}/openwrt
-        run: |
-          cat ./.config
-          echo '================================================================'
-          make -j1 V=s
+          make -j$(($(nproc) + 1)) || make -j1 V=s
 
       - name: Organize files
         if: inputs.build_firmware
@@ -288,7 +291,14 @@ jobs:
         run: |
           rm -rf ./artifact/
           mkdir -p ./artifact/
-          mv openwrt/bin/targets/${{ matrix.arch }}/${{ env.sysupgrade_glob }} ./artifact/ || true
+          shopt -s nullglob
+          files=(openwrt/bin/targets/${{ matrix.arch }}/${{ env.sysupgrade_glob }})
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::No firmware images found under openwrt/bin/targets/${{ matrix.arch }}/"
+            find openwrt/bin/targets -maxdepth 4 -type f | sort || true
+            exit 1
+          fi
+          mv "${files[@]}" ./artifact/
           cd ./artifact/
           ls -Ahl
           gzip -d *.gz || true
