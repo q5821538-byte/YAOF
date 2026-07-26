@@ -251,6 +251,17 @@ CONFIG_CPU_IDLE_GOV_TEO=y
 find ./target/linux/ -name "config-${KERNEL_VERSION}" | xargs -I{} sh -c "echo '$CONFIG_CONTENT' | tee -a {} > /dev/null"
 
 ### 最后的收尾工作 ###
+
+# 强制将默认的软件源替换为清华源（针对官方原版）
+sed -i 's/downloads.openwrt.org/mirrors.tuna.tsinghua.edu.cn\/openwrt/g' package/system/opkg/files/opkg.conf
+sed -i 's/downloads.openwrt.org/mirrors.tuna.tsinghua.edu.cn\/openwrt/g' include/target.mk
+sed -i 's/downloads.openwrt.org/mirrors.tuna.tsinghua.edu.cn\/openwrt/g' include/version.mk
+
+# 双重保险：强制将可能存在的交大源也替换为清华源
+sed -i 's/mirrors.sjtug.sjtu.edu.cn\/openwrt/mirrors.tuna.tsinghua.edu.cn\/openwrt/g' package/system/opkg/files/opkg.conf
+sed -i 's/mirrors.sjtug.sjtu.edu.cn\/openwrt/mirrors.tuna.tsinghua.edu.cn\/openwrt/g' include/target.mk
+sed -i 's/mirrors.sjtug.sjtu.edu.cn\/openwrt/mirrors.tuna.tsinghua.edu.cn\/openwrt/g' include/version.mk
+
 # Lets Fuck
 mkdir -p package/base-files/files/usr/bin
 cp -rf ../OpenWrt-Add/fuck ./package/base-files/files/usr/bin/fuck
