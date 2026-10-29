@@ -15,25 +15,23 @@ luci-i18n-package-manager-zh-cn
 luci-i18n-argon-config-zh-cn
 luci-i18n-graphite-zh-cn
 luci-i18n-flowcone-zh-cn
-luci-i18n-sqm-zh-cn
 luci-i18n-arpbind-zh-cn
 luci-i18n-ap-modem-zh-cn
 luci-i18n-filemanager-zh-cn
 luci-i18n-partexp-zh-cn
 luci-i18n-passwall-zh-cn
 
-# Proxy & eBPF
+# Proxy
 luci-app-openclash
 luci-app-passwall
+
+# Proxy & eBPF
+vmlinux-btf
 luci-app-flowcone
 
 # Network & Routing
-luci-app-sqm
 luci-app-arpbind
 luci-app-ap-modem
-
-# VPN & Services
-# (已清空)
 
 # System & Filesystem
 ethtool
