@@ -102,7 +102,22 @@ FEED_URL="https://qiusimons.github.io/OpenWrt-Add/${ARCH}/packages.adb"
 if ! grep -qxF "$FEED_URL" "${IB_DIR}/repositories"; then
     sed -i "1i ${FEED_URL}" "${IB_DIR}/repositories"
 fi
+# PassWall APK repository
+PASSWALL_KEY_URL="https://master.dl.sourceforge.net/project/openwrt-passwall-build/apk.pub"
+PASSWALL_KEY="${IB_DIR}/keys/openwrt-passwall-build.pem"
 
+log "Fetching PassWall APK signing key"
+curl -fsSL --retry 3 --retry-delay 2 \
+    "$PASSWALL_KEY_URL" -o "$PASSWALL_KEY" \
+    || die "Failed to download PassWall signing key"
+
+for feed in passwall_luci passwall_packages passwall2; do
+    PASSWALL_FEED="https://master.dl.sourceforge.net/project/openwrt-passwall-build/releases/packages-${VERSION%.*}/${ARCH}/${feed}/packages.adb"
+
+    if ! grep -qxF "$PASSWALL_FEED" "${IB_DIR}/repositories"; then
+        echo "$PASSWALL_FEED" >> "${IB_DIR}/repositories"
+    fi
+done
 OVERLAY_DIR="${WORK_DIR}/overlay"
 rm -rf "$OVERLAY_DIR"
 mkdir -p "$OVERLAY_DIR"
