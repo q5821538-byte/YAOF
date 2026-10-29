@@ -153,7 +153,23 @@ PACKAGES="$(load_packages "${ROOT_DIR}/profiles/packages.common") $(load_package
 BUILD_LOG="${WORK_DIR}/build.log"
 SKIPPED_PACKAGES=""
 MAX_SKIP_ROUNDS=5
+# Download official OpenClash APK for ImageBuilder
+OPENCLASH_VERSION="0.48.002"
+OPENCLASH_APK="${IB_DIR}/packages/luci-app-openclash-${OPENCLASH_VERSION}.apk"
+OPENCLASH_URL="https://github.com/vernesong/OpenClash/releases/download/v${OPENCLASH_VERSION}/luci-app-openclash-${OPENCLASH_VERSION}.apk"
 
+mkdir -p "${IB_DIR}/packages"
+
+log "Downloading OpenClash ${OPENCLASH_VERSION}"
+curl -fL --retry 3 --retry-delay 2 \
+    "${OPENCLASH_URL}" \
+    -o "${OPENCLASH_APK}" \
+    || die "Failed to download OpenClash APK"
+
+test -s "${OPENCLASH_APK}" \
+    || die "OpenClash APK is missing or empty"
+
+log "OpenClash APK downloaded: ${OPENCLASH_APK}"
 build_firmware() {
     local packages="$1"
     make -C "$IB_DIR" image \
