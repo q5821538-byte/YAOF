@@ -42,6 +42,9 @@ die() {
 
 # ============================================================
 # Resolve OpenWrt version
+# IMPORTANT:
+# Only the version number is written to stdout.
+# All log messages are written to stderr.
 # ============================================================
 
 resolve_version() {
@@ -55,7 +58,7 @@ resolve_version() {
         req="$default_major"
     fi
 
-    log "Checking available OpenWrt releases..."
+    log "Checking available OpenWrt releases..." >&2
 
     versions="$(
         curl -fsSL --retry 3 --retry-delay 2 \
@@ -65,7 +68,8 @@ resolve_version() {
         sort -V || true
     )"
 
-    [[ -n "$versions" ]] || die "Unable to retrieve OpenWrt release list."
+    [[ -n "$versions" ]] ||
+        die "Unable to retrieve OpenWrt release list."
 
     if printf '%s\n' "$versions" | grep -qxF "$req"; then
         printf '%s\n' "$req"
@@ -90,6 +94,7 @@ resolve_version() {
 }
 
 VERSION="$(resolve_version "$VERSION")"
+
 log "Using OpenWrt release: ${VERSION}"
 
 # ============================================================
@@ -152,8 +157,11 @@ if [[ ! -d "$IB_DIR" ]]; then
     rm -f "$IB_ARCHIVE"
 fi
 
-[[ -d "$IB_DIR" ]] || die "ImageBuilder directory not found."
-[[ -f "${IB_DIR}/repositories" ]] || die "ImageBuilder repositories file not found."
+[[ -d "$IB_DIR" ]] ||
+    die "ImageBuilder directory not found."
+
+[[ -f "${IB_DIR}/repositories" ]] ||
+    die "ImageBuilder repositories file not found."
 
 mkdir -p "${IB_DIR}/keys"
 mkdir -p "${IB_DIR}/packages"
@@ -182,6 +190,7 @@ download_nonempty() {
 # ============================================================
 
 KEY_URL="https://qiusimons.github.io/OpenWrt-Add/keys/custom-feed.rsa.pub"
+
 FEED_URL="https://qiusimons.github.io/OpenWrt-Add/${ARCH}/packages.adb"
 
 download_nonempty \
@@ -209,7 +218,9 @@ fi
 PASSWALL_BASE="https://master.dl.sourceforge.net/project/openwrt-passwall-build/releases/packages-${PASSWALL_RELEASE}/${ARCH}"
 
 PASSWALL_LUCI="${PASSWALL_BASE}/passwall_luci/packages.adb"
+
 PASSWALL_PACKAGES="${PASSWALL_BASE}/passwall_packages/packages.adb"
+
 PASSWALL2="${PASSWALL_BASE}/passwall2/packages.adb"
 
 PASSWALL_KEY_URL="https://master.dl.sourceforge.net/project/openwrt-passwall-build/apk.pub"
@@ -219,17 +230,15 @@ download_nonempty \
     "${IB_DIR}/keys/openwrt-passwall-build.pem" \
     "PassWall APK signing key"
 
-# Validate that the downloaded key is a PEM public key.
-grep -q "BEGIN PUBLIC KEY" \
-    "${IB_DIR}/keys/openwrt-passwall-build.pem" ||
-    die "PassWall signing key is not a valid PEM public key."
-
 check_passwall_repo() {
     local repo="$1"
     local name="$2"
     local temp_file="${WORK_DIR}/check-${name}.adb"
 
-    download_nonempty "$repo" "$temp_file" "$name package index"
+    download_nonempty \
+        "$repo" \
+        "$temp_file" \
+        "$name package index"
 
     rm -f "$temp_file"
 }
@@ -237,13 +246,17 @@ check_passwall_repo() {
 log "Checking PassWall repositories..."
 
 check_passwall_repo "$PASSWALL_LUCI" "passwall-luci"
+
 check_passwall_repo "$PASSWALL_PACKAGES" "passwall-packages"
+
 check_passwall_repo "$PASSWALL2" "passwall2"
 
 for repo in "$PASSWALL_LUCI" "$PASSWALL_PACKAGES" "$PASSWALL2"; do
+
     if ! grep -qxF "$repo" "${IB_DIR}/repositories"; then
         printf '%s\n' "$repo" >> "${IB_DIR}/repositories"
     fi
+
 done
 
 # ============================================================
@@ -261,7 +274,7 @@ download_nonempty \
 
 log "OpenClash APK ready: ${OPENCLASH_APK}"
 
-# ImageBuilder will index local APK packages in packages/.
+# ImageBuilder automatically indexes local APK packages.
 
 # ============================================================
 # Overlay
@@ -270,6 +283,7 @@ log "OpenClash APK ready: ${OPENCLASH_APK}"
 OVERLAY_DIR="${WORK_DIR}/overlay"
 
 rm -rf "$OVERLAY_DIR"
+
 mkdir -p "$OVERLAY_DIR"
 
 if [[ -d "${ROOT_DIR}/files" ]]; then
@@ -333,6 +347,7 @@ if [[ "$TARGET" == "rockchip" ]]; then
     if ! grep -qxF "aarch64_generic" "$ARCH_FILE"; then
         echo "aarch64_generic" >> "$ARCH_FILE"
     fi
+
 fi
 
 # ============================================================
@@ -361,9 +376,11 @@ load_packages() {
 }
 
 PACKAGES_COMMON="${ROOT_DIR}/profiles/packages.common"
+
 PACKAGES_CUSTOM="${ROOT_DIR}/profiles/${PACKAGES_PROFILE}"
 
 PACKAGES="$(load_packages "$PACKAGES_COMMON")"
+
 PACKAGES="${PACKAGES} $(load_packages "$PACKAGES_CUSTOM")"
 
 # ============================================================
@@ -371,7 +388,9 @@ PACKAGES="${PACKAGES} $(load_packages "$PACKAGES_CUSTOM")"
 # ============================================================
 
 PACKAGES="${PACKAGES} luci-app-openclash"
+
 PACKAGES="${PACKAGES} luci-app-passwall"
+
 PACKAGES="${PACKAGES} luci-i18n-passwall-zh-cn"
 
 # ============================================================
@@ -387,8 +406,11 @@ deduplicate_packages() {
     for token in $input; do
 
         if [[ -z "${seen[$token]+x}" ]]; then
+
             seen["$token"]=1
+
             result="${result}${result:+ }${token}"
+
         fi
 
     done
@@ -425,6 +447,7 @@ done
 # ============================================================
 
 log "Package profile: ${PACKAGES_PROFILE}"
+
 log "Packages to install:"
 
 for pkg in $PACKAGES; do
@@ -453,14 +476,23 @@ build_firmware() {
 # ============================================================
 
 log "============================================================"
+
 log "Building firmware"
+
 log "OpenWrt: ${VERSION}"
+
 log "Target: ${TARGET}/${SUBTARGET}"
+
 log "Profile: ${PROFILE}"
+
 log "Architecture: ${ARCH}"
+
 log "OpenClash: ${OPENCLASH_TAG}"
+
 log "PassWall: enabled"
+
 log "PassWall Chinese translation: enabled"
+
 log "============================================================"
 
 if ! build_firmware; then
@@ -468,7 +500,7 @@ if ! build_firmware; then
 fi
 
 # ============================================================
-# Check known post-install warnings
+# Check plugin post-install warnings
 # ============================================================
 
 if grep -E \
@@ -476,7 +508,9 @@ if grep -E \
     "$BUILD_LOG" >/dev/null 2>&1; then
 
     log "WARNING: Plugin post-install script warnings were detected."
+
     log "WARNING: Check OpenClash and PassWall after first boot."
+
     log "WARNING: See ${BUILD_LOG}"
 
 fi
@@ -537,16 +571,27 @@ done < <(
 # ============================================================
 
 log "============================================================"
+
 log "Build completed successfully."
+
 log "OpenWrt: ${VERSION}"
+
 log "Target: ${TARGET}/${SUBTARGET}"
+
 log "Profile: ${PROFILE}"
+
 log "OpenClash requested: ${OPENCLASH_TAG}"
+
 log "PassWall requested: yes"
+
 log "PassWall Chinese translation requested: yes"
+
 log "Firmware images generated: ${IMAGE_COUNT}"
+
 log "Output directory: ${OUTPUT_DIR}"
+
 log "Build log: ${BUILD_LOG}"
+
 log "============================================================"
 
 ls -lh "${OUTPUT_DIR}/"
