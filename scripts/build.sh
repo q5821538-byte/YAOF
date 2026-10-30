@@ -1,6 +1,5 @@
-
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -18,10 +17,19 @@ VERSION="${5:-}"
 OPENCLASH_TAG="${OPENCLASH_TAG:-v0.48.002}"
 OPENCLASH_VERSION="${OPENCLASH_TAG#v}"
 
-if [ -z "$TARGET" ] || [ -z "$SUBTARGET" ] || [ -z "$PROFILE" ] || [ -z "$PACKAGES_PROFILE" ]; then
+# ============================================================
+# Arguments
+# ============================================================
+
+if [[ -z "$TARGET" || -z "$SUBTARGET" ||
+      -z "$PROFILE" || -z "$PACKAGES_PROFILE" ]]; then
     echo "Usage: $0 <TARGET> <SUBTARGET> <PROFILE> <PACKAGES_PROFILE> [VERSION]" >&2
     exit 1
 fi
+
+# ============================================================
+# Logging
+# ============================================================
 
 log() {
     printf '[%s] %s\n' "$(date +'%T')" "$*"
@@ -39,50 +47,49 @@ die() {
 resolve_version() {
     local req="${1:-}"
     local default_major="25.12"
+    local versions
+    local matched
+    local escaped_req
 
-    if [ -z "$req" ] || [ "$req" = "latest" ]; then
+    if [[ -z "$req" || "$req" == "latest" ]]; then
         req="$default_major"
     fi
 
-    local versions
+    log "Checking available OpenWrt releases..."
 
-    versions=$(curl -fsSL --retry 3 https://downloads.openwrt.org/releases/ 2>/dev/null | \
-        grep -oE 'href="[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?/"' | \
-        sed 's/href="//;s/\///;s/"//' | sort -V || true)
+    versions="$(
+        curl -fsSL --retry 3 --retry-delay 2 \
+            https://downloads.openwrt.org/releases/ 2>/dev/null |
+        grep -oE 'href="[0-9]+\.[0-9]+\.[0-9]+/"' |
+        sed 's/href="//;s/\///;s/"//' |
+        sort -V || true
+    )"
 
-    if [ -z "$versions" ]; then
-        versions=$(git ls-remote --tags --refs https://github.com/openwrt/openwrt.git 2>/dev/null | \
-            awk -F'/' '{print $NF}' | sed 's/^v//' || true)
+    [[ -n "$versions" ]] || die "Unable to retrieve OpenWrt release list."
+
+    if printf '%s\n' "$versions" | grep -qxF "$req"; then
+        printf '%s\n' "$req"
+        return 0
     fi
 
-    if echo "$versions" | grep -qx "$req"; then
-        echo "$req"
-        return
+    escaped_req="${req//./\\.}"
+
+    matched="$(
+        printf '%s\n' "$versions" |
+        grep -E "^${escaped_req}\.[0-9]+$" |
+        sort -V |
+        tail -n 1 || true
+    )"
+
+    if [[ -n "$matched" ]]; then
+        printf '%s\n' "$matched"
+        return 0
     fi
 
-    local matched
-    local escaped_req="${req//./\\.}"
-
-    matched=$(echo "$versions" | grep -E "^${escaped_req}\.[0-9]+" | \
-        grep -v 'rc' | sort -V | tail -n 1 || true)
-
-    if [ -n "$matched" ]; then
-        echo "$matched"
-        return
-    fi
-
-    matched=$(echo "$versions" | grep -E "^${escaped_req}" | \
-        grep -v 'rc' | sort -V | tail -n 1 || true)
-
-    if [ -n "$matched" ]; then
-        echo "$matched"
-        return
-    fi
-
-    echo "${req:-25.12.6}"
+    die "OpenWrt release not found: ${req}"
 }
 
-VERSION=$(resolve_version "$VERSION")
+VERSION="$(resolve_version "$VERSION")"
 log "Using OpenWrt release: ${VERSION}"
 
 # ============================================================
@@ -101,7 +108,6 @@ case "$TARGET" in
         ;;
 esac
 
-# PassWall uses the OpenWrt major.minor release directory.
 PASSWALL_RELEASE="${VERSION%.*}"
 
 log "Architecture: ${ARCH}"
@@ -119,50 +125,78 @@ mkdir -p "$WORK_DIR" "$OUTPUT_DIR"
 IB_NAME="openwrt-imagebuilder-${VERSION}-${TARGET}-${SUBTARGET}.Linux-x86_64"
 IB_DIR="${WORK_DIR}/${IB_NAME}"
 
+BUILD_LOG="${WORK_DIR}/build.log"
+
 # ============================================================
 # Download ImageBuilder
 # ============================================================
 
-if [ ! -d "$IB_DIR" ]; then
+if [[ ! -d "$IB_DIR" ]]; then
+
     IB_ARCHIVE="${WORK_DIR}/${IB_NAME}.tar.zst"
 
     IB_URL="https://downloads.openwrt.org/releases/${VERSION}/targets/${TARGET}/${SUBTARGET}/${IB_NAME}.tar.zst"
 
-    log "Downloading ImageBuilder: ${IB_URL}"
+    log "Downloading ImageBuilder:"
+    log "$IB_URL"
 
-    curl -fsSL --retry 3 --retry-delay 2 "$IB_URL" \
-        -o "$IB_ARCHIVE" || die "Failed to download ImageBuilder archive"
+    curl -fL --retry 3 --retry-delay 2 \
+        "$IB_URL" -o "$IB_ARCHIVE" ||
+        die "Failed to download ImageBuilder."
 
-    tar --zstd -xf "$IB_ARCHIVE" -C "$WORK_DIR"
+    log "Extracting ImageBuilder..."
+
+    tar --zstd -xf "$IB_ARCHIVE" -C "$WORK_DIR" ||
+        die "Failed to extract ImageBuilder."
 
     rm -f "$IB_ARCHIVE"
 fi
 
-[ -d "$IB_DIR" ] || die "ImageBuilder directory not found"
+[[ -d "$IB_DIR" ]] || die "ImageBuilder directory not found."
+[[ -f "${IB_DIR}/repositories" ]] || die "ImageBuilder repositories file not found."
 
 mkdir -p "${IB_DIR}/keys"
 mkdir -p "${IB_DIR}/packages"
 
-[ -f "${IB_DIR}/repositories" ] || die "ImageBuilder repositories file not found"
+# ============================================================
+# Download and validate repository files
+# ============================================================
+
+download_nonempty() {
+    local url="$1"
+    local output="$2"
+    local description="$3"
+
+    log "Downloading ${description}"
+
+    curl -fL --retry 3 --retry-delay 2 \
+        "$url" -o "$output" ||
+        die "Download failed: ${description}"
+
+    [[ -s "$output" ]] ||
+        die "Downloaded file is empty: ${description}"
+}
 
 # ============================================================
 # YAOF repository
 # ============================================================
 
 KEY_URL="https://qiusimons.github.io/OpenWrt-Add/keys/custom-feed.rsa.pub"
-
-log "Fetching YAOF feed signing key: ${KEY_URL}"
-
-curl -fsSL --retry 3 --retry-delay 2 "$KEY_URL" \
-    -o "${IB_DIR}/keys/custom-feed.rsa.pub" \
-    || die "Failed to download YAOF signing key"
-
 FEED_URL="https://qiusimons.github.io/OpenWrt-Add/${ARCH}/packages.adb"
 
-log "Checking YAOF repository"
+download_nonempty \
+    "$KEY_URL" \
+    "${IB_DIR}/keys/custom-feed.rsa.pub" \
+    "YAOF signing key"
 
-curl -fsSL --retry 3 "$FEED_URL" -o /dev/null \
-    || die "YAOF repository unavailable: ${FEED_URL}"
+YAOF_INDEX="${WORK_DIR}/yaof-packages.adb"
+
+download_nonempty \
+    "$FEED_URL" \
+    "$YAOF_INDEX" \
+    "YAOF package index"
+
+rm -f "$YAOF_INDEX"
 
 if ! grep -qxF "$FEED_URL" "${IB_DIR}/repositories"; then
     sed -i "1i ${FEED_URL}" "${IB_DIR}/repositories"
@@ -180,22 +214,32 @@ PASSWALL2="${PASSWALL_BASE}/passwall2/packages.adb"
 
 PASSWALL_KEY_URL="https://master.dl.sourceforge.net/project/openwrt-passwall-build/apk.pub"
 
-log "Fetching PassWall signing key"
+download_nonempty \
+    "$PASSWALL_KEY_URL" \
+    "${IB_DIR}/keys/openwrt-passwall-build.pem" \
+    "PassWall APK signing key"
 
-curl -fsSL --retry 3 --retry-delay 2 "$PASSWALL_KEY_URL" \
-    -o "${IB_DIR}/keys/openwrt-passwall-build.pem" \
-    || die "Failed to download PassWall signing key"
+# Validate that the downloaded key is a PEM public key.
+grep -q "BEGIN PUBLIC KEY" \
+    "${IB_DIR}/keys/openwrt-passwall-build.pem" ||
+    die "PassWall signing key is not a valid PEM public key."
 
-log "Checking PassWall repositories"
+check_passwall_repo() {
+    local repo="$1"
+    local name="$2"
+    local temp_file="${WORK_DIR}/check-${name}.adb"
 
-for repo in "$PASSWALL_LUCI" "$PASSWALL_PACKAGES" "$PASSWALL2"; do
-    log "Checking: ${repo}"
+    download_nonempty "$repo" "$temp_file" "$name package index"
 
-    curl -fsSL --retry 3 "$repo" -o /dev/null \
-        || die "PassWall repository unavailable: ${repo}"
-done
+    rm -f "$temp_file"
+}
 
-# Add PassWall repositories to ImageBuilder.
+log "Checking PassWall repositories..."
+
+check_passwall_repo "$PASSWALL_LUCI" "passwall-luci"
+check_passwall_repo "$PASSWALL_PACKAGES" "passwall-packages"
+check_passwall_repo "$PASSWALL2" "passwall2"
+
 for repo in "$PASSWALL_LUCI" "$PASSWALL_PACKAGES" "$PASSWALL2"; do
     if ! grep -qxF "$repo" "${IB_DIR}/repositories"; then
         printf '%s\n' "$repo" >> "${IB_DIR}/repositories"
@@ -210,18 +254,14 @@ OPENCLASH_URL="https://github.com/vernesong/OpenClash/releases/download/${OPENCL
 
 OPENCLASH_APK="${IB_DIR}/packages/luci-app-openclash-${OPENCLASH_VERSION}.apk"
 
-log "Downloading OpenClash ${OPENCLASH_TAG}"
+download_nonempty \
+    "$OPENCLASH_URL" \
+    "$OPENCLASH_APK" \
+    "OpenClash ${OPENCLASH_TAG} APK"
 
-curl -fL --retry 3 --retry-delay 2 "$OPENCLASH_URL" \
-    -o "$OPENCLASH_APK" \
-    || die "Failed to download OpenClash APK"
+log "OpenClash APK ready: ${OPENCLASH_APK}"
 
-[ -s "$OPENCLASH_APK" ] || die "OpenClash APK is empty"
-
-log "OpenClash APK downloaded: ${OPENCLASH_APK}"
-
-# OpenWrt 25.12 ImageBuilder automatically indexes
-# local APK packages in the packages/ directory.
+# ImageBuilder will index local APK packages in packages/.
 
 # ============================================================
 # Overlay
@@ -232,7 +272,7 @@ OVERLAY_DIR="${WORK_DIR}/overlay"
 rm -rf "$OVERLAY_DIR"
 mkdir -p "$OVERLAY_DIR"
 
-if [ -d "${ROOT_DIR}/files" ]; then
+if [[ -d "${ROOT_DIR}/files" ]]; then
     cp -af "${ROOT_DIR}/files/." "$OVERLAY_DIR/"
 fi
 
@@ -244,11 +284,10 @@ mkdir -p "${OVERLAY_DIR}/usr/bin"
 
 FUCK_URL="https://raw.githubusercontent.com/QiuSimons/OpenWrt-Add/master/core/tools/clean-overlay.sh"
 
-log "Fetching fuck utility: ${FUCK_URL}"
-
-curl -fsSL --retry 3 --retry-delay 2 "$FUCK_URL" \
-    -o "${OVERLAY_DIR}/usr/bin/fuck" \
-    || die "Failed to download clean-overlay.sh"
+download_nonempty \
+    "$FUCK_URL" \
+    "${OVERLAY_DIR}/usr/bin/fuck" \
+    "YAOF clean-overlay utility"
 
 chmod +x "${OVERLAY_DIR}/usr/bin/fuck"
 
@@ -258,10 +297,12 @@ chmod +x "${OVERLAY_DIR}/usr/bin/fuck"
 
 mkdir -p "${OVERLAY_DIR}/etc/apk/keys"
 
-cp -af "${IB_DIR}/keys/custom-feed.rsa.pub" \
+cp -af \
+    "${IB_DIR}/keys/custom-feed.rsa.pub" \
     "${OVERLAY_DIR}/etc/apk/keys/"
 
-cp -af "${IB_DIR}/keys/openwrt-passwall-build.pem" \
+cp -af \
+    "${IB_DIR}/keys/openwrt-passwall-build.pem" \
     "${OVERLAY_DIR}/etc/apk/keys/"
 
 # ============================================================
@@ -281,10 +322,12 @@ EOF
 # Rockchip APK architecture
 # ============================================================
 
-if [ "$TARGET" = "rockchip" ]; then
+if [[ "$TARGET" == "rockchip" ]]; then
+
     mkdir -p "${OVERLAY_DIR}/etc/apk"
 
     ARCH_FILE="${OVERLAY_DIR}/etc/apk/arch"
+
     touch "$ARCH_FILE"
 
     if ! grep -qxF "aarch64_generic" "$ARCH_FILE"; then
@@ -299,129 +342,143 @@ fi
 load_packages() {
     local file="$1"
 
-    [ -f "$file" ] || die "Package profile not found: $file"
+    [[ -f "$file" ]] ||
+        die "Package profile not found: ${file}"
 
-    grep -v '^[[:space:]]*#' "$file" |
-        grep -v '^[[:space:]]*$' |
-        tr '\n' ' '
+    awk '
+    {
+        sub(/\r$/, "")
+        sub(/[[:space:]]+#.*/, "")
+
+        if ($0 ~ /^[[:space:]]*#/) next
+        if ($0 ~ /^[[:space:]]*$/) next
+
+        gsub(/^[ \t]+|[ \t]+$/, "")
+
+        if ($0 != "") print
+    }
+    ' "$file" | tr '\n' ' '
 }
 
-PACKAGES="$(load_packages "${ROOT_DIR}/profiles/packages.common")"
-PACKAGES="${PACKAGES} $(load_packages "${ROOT_DIR}/profiles/${PACKAGES_PROFILE}")"
+PACKAGES_COMMON="${ROOT_DIR}/profiles/packages.common"
+PACKAGES_CUSTOM="${ROOT_DIR}/profiles/${PACKAGES_PROFILE}"
+
+PACKAGES="$(load_packages "$PACKAGES_COMMON")"
+PACKAGES="${PACKAGES} $(load_packages "$PACKAGES_CUSTOM")"
 
 # ============================================================
-# Add OpenClash and PassWall applications
+# Add required proxy applications
 # ============================================================
-
-# OpenClash is supplied by the local APK downloaded above.
-# PassWall and its Chinese translation are supplied by PassWall feeds.
 
 PACKAGES="${PACKAGES} luci-app-openclash"
 PACKAGES="${PACKAGES} luci-app-passwall"
 PACKAGES="${PACKAGES} luci-i18n-passwall-zh-cn"
 
-# Remove duplicate package names, preserving order.
-PACKAGES="$(printf '%s\n' $PACKAGES | awk 'NF && !seen[$0]++' | tr '\n' ' ')"
+# ============================================================
+# Remove duplicate package entries
+# ============================================================
 
-# These three packages must never be silently skipped.
-REQUIRED_PACKAGES="
-luci-app-openclash
-luci-app-passwall
-luci-i18n-passwall-zh-cn
-"
+deduplicate_packages() {
+    local input="$1"
+    local token
+    local result=""
+    local -A seen=()
 
-BUILD_LOG="${WORK_DIR}/build.log"
-SKIPPED_PACKAGES=""
-MAX_SKIP_ROUNDS=5
+    for token in $input; do
+
+        if [[ -z "${seen[$token]+x}" ]]; then
+            seen["$token"]=1
+            result="${result}${result:+ }${token}"
+        fi
+
+    done
+
+    printf '%s' "$result"
+}
+
+PACKAGES="$(deduplicate_packages "$PACKAGES")"
+
+# ============================================================
+# Required package validation
+# ============================================================
+
+REQUIRED_PACKAGES=(
+    "luci-app-openclash"
+    "luci-app-passwall"
+    "luci-i18n-passwall-zh-cn"
+)
+
+for required in "${REQUIRED_PACKAGES[@]}"; do
+
+    if [[ " $PACKAGES " == *" -${required} "* ]]; then
+        die "Required package is explicitly excluded: ${required}"
+    fi
+
+    if [[ " $PACKAGES " != *" ${required} "* ]]; then
+        die "Required package missing from package list: ${required}"
+    fi
+
+done
+
+# ============================================================
+# Print package list
+# ============================================================
+
+log "Package profile: ${PACKAGES_PROFILE}"
+log "Packages to install:"
+
+for pkg in $PACKAGES; do
+    log "  ${pkg}"
+done
 
 # ============================================================
 # Build firmware
 # ============================================================
 
 build_firmware() {
-    local packages="$1"
+
+    log "Starting ImageBuilder..."
 
     make -C "$IB_DIR" image \
         PROFILE="$PROFILE" \
-        PACKAGES="$packages" \
+        PACKAGES="$PACKAGES" \
         FILES="$OVERLAY_DIR" \
-        ROOTFS_PARTSIZE="1024" 2>&1 | tee "$BUILD_LOG"
+        ROOTFS_PARTSIZE="1024" \
+        2>&1 | tee "$BUILD_LOG"
+
 }
 
 # ============================================================
-# Detect missing packages
+# Build
 # ============================================================
 
-missing_packages_from_log() {
-    local log_file="$1"
-
-    # APK (OpenWrt 25.x)
-    sed -nE 's/^[[:space:]]*([^ ]+) \(no such package\):[[:space:]]*$/\1/p' "$log_file"
-
-    # OPKG (OpenWrt 24.x and older)
-    sed -nE 's/.*opkg_install_cmd: Cannot install package ([^ ]+)\.$/\1/p' "$log_file"
-}
-
-# ============================================================
-# Build loop
-# ============================================================
-
-log "Assembling firmware for ${PROFILE} (${VERSION})..."
+log "============================================================"
+log "Building firmware"
+log "OpenWrt: ${VERSION}"
+log "Target: ${TARGET}/${SUBTARGET}"
+log "Profile: ${PROFILE}"
+log "Architecture: ${ARCH}"
 log "OpenClash: ${OPENCLASH_TAG}"
 log "PassWall: enabled"
 log "PassWall Chinese translation: enabled"
+log "============================================================"
 
-skip_round=0
+if ! build_firmware; then
+    die "Firmware build failed. Check log: ${BUILD_LOG}"
+fi
 
-while :; do
+# ============================================================
+# Check known post-install warnings
+# ============================================================
 
-    if build_firmware "$PACKAGES"; then
-        break
-    fi
+if grep -E \
+    '(/lib/functions\.sh: No such file|/lib/functions/network\.sh: No such file|/usr/share/openclash/.*No such file|/usr/share/passwall/.*No such file)' \
+    "$BUILD_LOG" >/dev/null 2>&1; then
 
-    missing="$(missing_packages_from_log "$BUILD_LOG" | sort -u)"
+    log "WARNING: Plugin post-install script warnings were detected."
+    log "WARNING: Check OpenClash and PassWall after first boot."
+    log "WARNING: See ${BUILD_LOG}"
 
-    if [ -z "$missing" ]; then
-        die "Firmware build failed (no unavailable package detected). See ${BUILD_LOG}"
-    fi
-
-    # Never skip OpenClash, PassWall or its Chinese translation.
-    for required in $REQUIRED_PACKAGES; do
-        if printf '%s\n' "$missing" | grep -qxF -- "$required"; then
-            die "Required package unavailable: ${required}. Build stopped."
-        fi
-    done
-
-    kept=""
-    skipped=""
-
-    for pkg in $PACKAGES; do
-        if printf '%s\n' "$missing" | grep -qxF -- "$pkg"; then
-            skipped="${skipped}${skipped:+ }${pkg}"
-        else
-            kept="${kept}${kept:+ }${pkg}"
-        fi
-    done
-
-    if [ -z "$skipped" ]; then
-        die "Firmware build failed (no unavailable package detected). See ${BUILD_LOG}"
-    fi
-
-    skip_round=$((skip_round + 1))
-
-    if [ "$skip_round" -gt "$MAX_SKIP_ROUNDS" ]; then
-        die "Too many unavailable packages; last skipped: ${skipped}. See ${BUILD_LOG}"
-    fi
-
-    log "WARNING: Package(s) not available in repositories, skipping: ${skipped}"
-
-    SKIPPED_PACKAGES="${SKIPPED_PACKAGES}${SKIPPED_PACKAGES:+ }${skipped}"
-
-    PACKAGES="$kept"
-done
-
-if [ -n "$SKIPPED_PACKAGES" ]; then
-    log "WARNING: Firmware built without unavailable package(s): ${SKIPPED_PACKAGES}"
 fi
 
 # ============================================================
@@ -430,26 +487,32 @@ fi
 
 IB_BIN_DIR="${IB_DIR}/bin/targets/${TARGET}/${SUBTARGET}"
 
-[ -d "$IB_BIN_DIR" ] || die "Output directory not found: $IB_BIN_DIR"
+[[ -d "$IB_BIN_DIR" ]] ||
+    die "Output directory not found: ${IB_BIN_DIR}"
 
-DATE_STR=$(date +%Y-%m-%d)
+DATE_STR="$(date +%Y-%m-%d)"
 
-PLATFORM_LABEL=$(echo "$PROFILE" | sed \
-    's/^friendlyarm_nanopi-/nanopi-/; s/^generic$/x86-64/')
+PLATFORM_LABEL="$(echo "$PROFILE" | sed \
+    's/^friendlyarm_nanopi-/nanopi-/; s/^generic$/x86-64/')"
 
 MATCH_PATTERN="*sysupgrade.img.gz"
 
-if [ "$TARGET" = "x86" ]; then
+if [[ "$TARGET" == "x86" ]]; then
     MATCH_PATTERN="*combined-efi.img.gz"
 fi
+
+# ============================================================
+# Copy firmware images
+# ============================================================
 
 IMAGE_COUNT=0
 
 while IFS= read -r -d '' img; do
-    fname=$(basename "$img")
 
-    clean_suffix=$(echo "$fname" | sed \
-        -E "s/^openwrt-.*-${TARGET}-${SUBTARGET}-${PROFILE}-//")
+    fname="$(basename "$img")"
+
+    clean_suffix="$(echo "$fname" | sed \
+        -E "s/^openwrt-.*-${TARGET}-${SUBTARGET}-${PROFILE}-//")"
 
     out_name="YAOF-${PLATFORM_LABEL}-${VERSION}-${DATE_STR}-${clean_suffix}"
 
@@ -459,24 +522,31 @@ while IFS= read -r -d '' img; do
 
     IMAGE_COUNT=$((IMAGE_COUNT + 1))
 
-done < <(find "$IB_BIN_DIR" -type f -name "$MATCH_PATTERN" -print0)
+done < <(
+    find "$IB_BIN_DIR" \
+        -type f \
+        -name "$MATCH_PATTERN" \
+        -print0
+)
 
-[ "$IMAGE_COUNT" -gt 0 ] || die "No firmware image found: ${MATCH_PATTERN}"
+[[ "$IMAGE_COUNT" -gt 0 ]] ||
+    die "No firmware image found: ${MATCH_PATTERN}"
 
 # ============================================================
-# Summary
+# Final summary
 # ============================================================
 
-log "Build completed successfully for ${PROFILE}."
-
-log "OpenClash: ${OPENCLASH_TAG}"
-log "PassWall: installed"
-log "PassWall Chinese translation: installed"
-
+log "============================================================"
+log "Build completed successfully."
+log "OpenWrt: ${VERSION}"
+log "Target: ${TARGET}/${SUBTARGET}"
+log "Profile: ${PROFILE}"
+log "OpenClash requested: ${OPENCLASH_TAG}"
+log "PassWall requested: yes"
+log "PassWall Chinese translation requested: yes"
 log "Firmware images generated: ${IMAGE_COUNT}"
-
-if [ -n "$SKIPPED_PACKAGES" ]; then
-    log "WARNING: Other unavailable packages were skipped: ${SKIPPED_PACKAGES}"
-fi
+log "Output directory: ${OUTPUT_DIR}"
+log "Build log: ${BUILD_LOG}"
+log "============================================================"
 
 ls -lh "${OUTPUT_DIR}/"
