@@ -48,6 +48,7 @@ luci-app-ap-modem
 # VPN & Services
 # ============================================================
 
+
 # ============================================================
 # System & Filesystem
 # ============================================================
@@ -97,7 +98,7 @@ kmod-inet-diag
 kmod-nft-tproxy
 
 # ============================================================
-# PassWall Dependencies
+# PassWall Basic Dependencies
 # ============================================================
 
 coreutils
@@ -133,16 +134,25 @@ ipt2socks
 
 xray-core
 sing-box
+haproxy
 geoview
+
+# Shadowsocks Rust
 shadowsocks-rust-sslocal
 shadowsocks-rust-ssserver
+
+# ShadowsocksR
 shadowsocksr-libev-ssr-local
 shadowsocksr-libev-ssr-redir
 shadowsocksr-libev-ssr-server
+
+# Proxy Plugins
 simple-obfs-client
 v2ray-plugin
 xray-plugin
 shadow-tls
+
+# Optional Proxy Protocols
 hysteria
 naiveproxy
 
