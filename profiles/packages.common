@@ -1,4 +1,7 @@
+# ============================================================
 # UI
+# ============================================================
+
 luci
 luci-mod-dashboard
 luci-theme-aurora
@@ -7,7 +10,10 @@ luci-theme-graphite
 luci-theme-footstrap
 addition-trans-zh
 
+# ============================================================
 # Translations
+# ============================================================
+
 luci-i18n-base-zh-cn
 luci-i18n-dashboard-zh-cn
 luci-i18n-firewall-zh-cn
@@ -22,20 +28,30 @@ luci-i18n-filemanager-zh-cn
 luci-i18n-partexp-zh-cn
 luci-i18n-passwall-zh-cn
 
+# ============================================================
 # Proxy & eBPF
+# ============================================================
+
 luci-app-openclash
 luci-app-passwall
 luci-app-flowcone
 
+# ============================================================
 # Network & Routing
+# ============================================================
+
 luci-app-sqm
 luci-app-arpbind
 luci-app-ap-modem
 
+# ============================================================
 # VPN & Services
-# (已清空)
+# ============================================================
 
+# ============================================================
 # System & Filesystem
+# ============================================================
+
 ethtool
 kmod-fs-f2fs
 kmod-tcp-bbr
@@ -43,14 +59,96 @@ zram-swap
 luci-app-filemanager
 luci-app-partexp
 
+# SFTP Server
+openssh-sftp-server
+
+# ============================================================
 # USB Tethering
+# ============================================================
+
 kmod-usb-net-rndis
 kmod-usb-net-ipheth
 usbmuxd
 kmod-usb-net-cdc-ether
 
+# ============================================================
 # Base Packages
+# ============================================================
+
 -dnsmasq
 dnsmasq-full
 -luci-app-attendedsysupgrade
 -attendedsysupgrade-common
+
+# ============================================================
+# OpenClash Dependencies
+# ============================================================
+
+bash
+curl
+ca-bundle
+ruby
+ruby-yaml
+ipset
+ip-full
+unzip
+kmod-tun
+kmod-inet-diag
+kmod-nft-tproxy
+
+# ============================================================
+# PassWall Dependencies
+# ============================================================
+
+coreutils
+coreutils-base64
+coreutils-nohup
+coreutils-timeout
+chinadns-ng
+dns2socks
+libuci-lua
+lua
+luci-compat
+luci-lib-jsonc
+microsocks
+resolveip
+tcping
+lyaml
+
+# ============================================================
+# PassWall Firewall4 / nftables
+# ============================================================
+
+nftables
+kmod-nft-socket
+kmod-nft-tproxy
+kmod-nft-nat
+kmod-nf-reject
+kmod-nf-reject6
+ipt2socks
+
+# ============================================================
+# PassWall Proxy Cores
+# ============================================================
+
+xray-core
+sing-box
+geoview
+shadowsocks-rust-sslocal
+shadowsocks-rust-ssserver
+shadowsocksr-libev-ssr-local
+shadowsocksr-libev-ssr-redir
+shadowsocksr-libev-ssr-server
+simple-obfs-client
+v2ray-plugin
+xray-plugin
+shadow-tls
+hysteria
+naiveproxy
+
+# ============================================================
+# PassWall Geo Data
+# ============================================================
+
+v2ray-geoip
+v2ray-geosite
