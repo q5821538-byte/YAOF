@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -101,7 +100,6 @@ case "$TARGET" in
         ;;
 esac
 
-# PassWall uses the OpenWrt major.minor release directory.
 PASSWALL_RELEASE="${VERSION%.*}"
 
 log "Architecture: ${ARCH}"
@@ -195,7 +193,6 @@ for repo in "$PASSWALL_LUCI" "$PASSWALL_PACKAGES" "$PASSWALL2"; do
         || die "PassWall repository unavailable: ${repo}"
 done
 
-# Add PassWall repositories to ImageBuilder.
 for repo in "$PASSWALL_LUCI" "$PASSWALL_PACKAGES" "$PASSWALL2"; do
     if ! grep -qxF "$repo" "${IB_DIR}/repositories"; then
         printf '%s\n' "$repo" >> "${IB_DIR}/repositories"
@@ -219,9 +216,6 @@ curl -fL --retry 3 --retry-delay 2 "$OPENCLASH_URL" \
 [ -s "$OPENCLASH_APK" ] || die "OpenClash APK is empty"
 
 log "OpenClash APK downloaded: ${OPENCLASH_APK}"
-
-# OpenWrt 25.12 ImageBuilder automatically indexes
-# local APK packages in the packages/ directory.
 
 # ============================================================
 # Overlay
@@ -310,24 +304,36 @@ PACKAGES="$(load_packages "${ROOT_DIR}/profiles/packages.common")"
 PACKAGES="${PACKAGES} $(load_packages "${ROOT_DIR}/profiles/${PACKAGES_PROFILE}")"
 
 # ============================================================
-# Add OpenClash and PassWall applications
+# Add required applications
 # ============================================================
 
-# OpenClash is supplied by the local APK downloaded above.
-# PassWall and its Chinese translation are supplied by PassWall feeds.
+# OpenClash: local APK
+# PassWall: PassWall repositories
+# AP-Modem: must be available in a configured package repository
 
 PACKAGES="${PACKAGES} luci-app-openclash"
 PACKAGES="${PACKAGES} luci-app-passwall"
 PACKAGES="${PACKAGES} luci-i18n-passwall-zh-cn"
 
+# Explicitly include AP-Modem and Chinese translation.
+PACKAGES="${PACKAGES} luci-app-ap-modem"
+PACKAGES="${PACKAGES} luci-i18n-ap-modem-zh-cn"
+
 # Remove duplicate package names, preserving order.
 PACKAGES="$(printf '%s\n' $PACKAGES | awk 'NF && !seen[$0]++' | tr '\n' ' ')"
 
-# These three packages must never be silently skipped.
+# ============================================================
+# Mandatory packages
+# ============================================================
+
+# These packages must never be silently skipped.
+
 REQUIRED_PACKAGES="
 luci-app-openclash
 luci-app-passwall
 luci-i18n-passwall-zh-cn
+luci-app-ap-modem
+luci-i18n-ap-modem-zh-cn
 "
 
 BUILD_LOG="${WORK_DIR}/build.log"
@@ -370,6 +376,8 @@ log "Assembling firmware for ${PROFILE} (${VERSION})..."
 log "OpenClash: ${OPENCLASH_TAG}"
 log "PassWall: enabled"
 log "PassWall Chinese translation: enabled"
+log "AP-Modem: required"
+log "AP-Modem Chinese translation: required"
 
 skip_round=0
 
@@ -385,7 +393,7 @@ while :; do
         die "Firmware build failed (no unavailable package detected). See ${BUILD_LOG}"
     fi
 
-    # Never skip OpenClash, PassWall or its Chinese translation.
+    # Never skip mandatory packages.
     for required in $REQUIRED_PACKAGES; do
         if printf '%s\n' "$missing" | grep -qxF -- "$required"; then
             die "Required package unavailable: ${required}. Build stopped."
@@ -472,6 +480,8 @@ log "Build completed successfully for ${PROFILE}."
 log "OpenClash: ${OPENCLASH_TAG}"
 log "PassWall: installed"
 log "PassWall Chinese translation: installed"
+log "AP-Modem: installed"
+log "AP-Modem Chinese translation: installed"
 
 log "Firmware images generated: ${IMAGE_COUNT}"
 
