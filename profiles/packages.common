@@ -1,10 +1,14 @@
+# ============================================================
 # UI
+# ============================================================
 luci
 luci-theme-vantage
 luci-app-vantage
 addition-trans-zh
 
+# ============================================================
 # Translations
+# ============================================================
 luci-i18n-base-zh-cn
 luci-i18n-firewall-zh-cn
 luci-i18n-package-manager-zh-cn
@@ -18,12 +22,16 @@ luci-i18n-filemanager-zh-cn
 luci-i18n-partexp-zh-cn
 luci-i18n-passwall-zh-cn
 
-# Proxy
+# ============================================================
+# Proxy Applications
+# ============================================================
 luci-app-flowcone
 luci-app-openclash
 luci-app-passwall
 
+# ============================================================
 # OpenClash Dependencies
+# ============================================================
 bash
 curl
 ca-bundle
@@ -36,7 +44,9 @@ kmod-nft-tproxy
 kmod-tun
 kmod-inet-diag
 
-# PassWall Dependencies
+# ============================================================
+# PassWall Basic Dependencies
+# ============================================================
 coreutils
 coreutils-base64
 coreutils-nohup
@@ -52,12 +62,60 @@ resolveip
 tcping
 lyaml
 
+# ============================================================
+# nftables
+# ============================================================
+nftables
+kmod-nft-socket
+kmod-nft-tproxy
+kmod-nft-nat
+kmod-nf-reject
+kmod-nf-reject6
+ipt2socks
+
+# ============================================================
+# PassWall Proxy Cores
+# ============================================================
+xray-core
+sing-box
+haproxy
+geoview
+
+# Shadowsocks Rust
+shadowsocks-rust-sslocal
+shadowsocks-rust-ssserver
+
+# ShadowsocksR
+shadowsocksr-libev-ssr-local
+shadowsocksr-libev-ssr-redir
+shadowsocksr-libev-ssr-server
+
+# Proxy Plugins
+simple-obfs-client
+v2ray-plugin
+xray-plugin
+shadow-tls
+
+# Optional Proxy Protocols
+hysteria
+naiveproxy
+
+# ============================================================
+# PassWall Geo Data
+# ============================================================
+v2ray-geoip
+v2ray-geosite
+
+# ============================================================
 # Network & Routing
+# ============================================================
 luci-app-sqm
 luci-app-arpbind
 luci-app-ap-modem
 
+# ============================================================
 # System & Filesystem
+# ============================================================
 ethtool
 kmod-fs-f2fs
 kmod-tcp-bbr
@@ -66,13 +124,17 @@ luci-app-filemanager
 luci-app-partexp
 openssh-sftp-server
 
+# ============================================================
 # USB Tethering
+# ============================================================
 kmod-usb-net-rndis
 kmod-usb-net-ipheth
 usbmuxd
 kmod-usb-net-cdc-ether
 
+# ============================================================
 # Base Packages
+# ============================================================
 -dnsmasq
 dnsmasq-full
 -luci-app-attendedsysupgrade
