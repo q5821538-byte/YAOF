@@ -1,11 +1,17 @@
+# ============================================================
 # UI
+# ============================================================
+
 luci
 luci-compat
 luci-theme-aurora
 luci-app-aurora-config
 addition-trans-zh
 
+# ============================================================
 # Translations
+# ============================================================
+
 luci-i18n-base-zh-cn
 luci-i18n-firewall-zh-cn
 luci-i18n-package-manager-zh-cn
@@ -18,47 +24,121 @@ luci-i18n-ap-modem-zh-cn
 luci-i18n-filemanager-zh-cn
 luci-i18n-partexp-zh-cn
 
-# Proxy & Dependencies (OpenClash & PassWall)
+# ============================================================
+# Proxy Apps
+# ============================================================
+
 luci-app-openclash
 luci-app-passwall
+
+# ============================================================
+# OpenClash & PassWall Dependencies
+# ============================================================
+
 bash
 curl
 ca-bundle
 coreutils
 coreutils-base64
 coreutils-nohup
+coreutils-timeout
 ip-full
+ipset
 libcap
 libcap-bin
+libuci-lua
+lua
+luci-compat
+luci-lib-jsonc
 ruby
 ruby-yaml
 unzip
 tcping
 microsocks
 resolveip
-kmod-tun
-kmod-inet-diag
-kmod-nft-tproxy
-kmod-nft-socket
-kmod-nft-nat
+lyaml
 chinadns-ng
 dns2socks
 dns2tcp
+ipt2socks
+
+# ============================================================
+# nftables
+# ============================================================
+
+nftables
+kmod-nft-socket
+kmod-nft-tproxy
+kmod-nft-nat
+kmod-nf-reject
+kmod-nf-reject6
+
+# ============================================================
+# PassWall Proxy Cores
+# ============================================================
+
 xray-core
 sing-box
+haproxy
+geoview
+
+# ============================================================
+# Shadowsocks Rust
+# ============================================================
+
+shadowsocks-rust-sslocal
+shadowsocks-rust-ssserver
+
+# ============================================================
+# ShadowsocksR
+# ============================================================
+
+shadowsocksr-libev-ssr-local
+shadowsocksr-libev-ssr-redir
+shadowsocksr-libev-ssr-server
+
+# ============================================================
+# Proxy Plugins
+# ============================================================
+
+simple-obfs-client
+v2ray-plugin
+xray-plugin
+shadow-tls
+
+# ============================================================
+# Optional Proxy Protocols
+# ============================================================
+
+hysteria
+naiveproxy
+
+# ============================================================
+# Geo Data
+# ============================================================
+
 v2ray-geoip
 v2ray-geosite
 
+# ============================================================
 # eBPF & NAT
+# ============================================================
+
 vmlinux-btf
 luci-app-flowcone
 
+# ============================================================
 # Network & Routing
+# ============================================================
+
 luci-app-sqm
 luci-app-arpbind
 luci-app-ap-modem
 
+# ============================================================
 # System, SFTP & Filesystem
+# ============================================================
+
 openssh-sftp-server
 ethtool
 kmod-fs-f2fs
@@ -67,13 +147,19 @@ zram-swap
 luci-app-filemanager
 luci-app-partexp
 
+# ============================================================
 # USB Tethering
+# ============================================================
+
 kmod-usb-net-rndis
 kmod-usb-net-ipheth
 usbmuxd
 kmod-usb-net-cdc-ether
 
+# ============================================================
 # Base Packages
+# ============================================================
+
 -dnsmasq
 dnsmasq-full
 -luci-app-attendedsysupgrade
