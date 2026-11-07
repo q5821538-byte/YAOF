@@ -103,6 +103,30 @@ if ! grep -qxF "$FEED_URL" "${IB_DIR}/repositories"; then
     sed -i "1i ${FEED_URL}" "${IB_DIR}/repositories"
 fi
 
+# 自动下载 OpenClash 与 PassWall 的 .apk 包到 ImageBuilder 本地仓库目录
+mkdir -p "${IB_DIR}/packages"
+log "Checking and downloading third-party proxy packages (.apk)..."
+
+if ! ls "${IB_DIR}/packages"/luci-app-openclash*.apk 1>/dev/null 2>&1; then
+    log "Downloading OpenClash apk..."
+    OC_URL=$(curl -fsSL https://api.github.com/repos/vernesong/OpenClash/releases/latest 2>/dev/null | grep -oE 'https://[^"]+luci-app-openclash_[^"]+\.apk' | head -n 1 || true)
+    if [ -n "$OC_URL" ]; then
+        curl -fsSL --retry 3 "$OC_URL" -o "${IB_DIR}/packages/luci-app-openclash.apk" || true
+    else
+        curl -fsSL --retry 3 "https://github.com/vernesong/OpenClash/releases/latest/download/luci-app-openclash.apk" -o "${IB_DIR}/packages/luci-app-openclash.apk" || true
+    fi
+fi
+
+if ! ls "${IB_DIR}/packages"/luci-app-passwall*.apk 1>/dev/null 2>&1; then
+    log "Downloading PassWall apk..."
+    PW_URL=$(curl -fsSL https://api.github.com/repos/xiaorouji/openwrt-passwall/releases/latest 2>/dev/null | grep -oE 'https://[^"]+luci-app-passwall_[^"]+\.apk' | head -n 1 || true)
+    if [ -n "$PW_URL" ]; then
+        curl -fsSL --retry 3 "$PW_URL" -o "${IB_DIR}/packages/luci-app-passwall.apk" || true
+    else
+        curl -fsSL --retry 3 "https://github.com/xiaorouji/openwrt-passwall/releases/latest/download/luci-app-passwall.apk" -o "${IB_DIR}/packages/luci-app-passwall.apk" || true
+    fi
+fi
+
 OVERLAY_DIR="${WORK_DIR}/overlay"
 rm -rf "$OVERLAY_DIR"
 mkdir -p "$OVERLAY_DIR"
@@ -134,7 +158,7 @@ load_packages() {
     grep -v '^[[:space:]]*#' "$file" | grep -v '^[[:space:]]*$' | tr '\n' ' '
 }
 
-PACKAGES="$(load_packages "${ROOT_DIR}/profiles/packages.common") $(load_packages "${ROOT_DIR}/profiles/${PACKAGES_PROFILE}") luci-app-openclash luci-i18n-openclash-zh-cn luci-app-passwall luci-i18n-passwall-zh-cn"
+PACKAGES="$(load_packages "${ROOT_DIR}/profiles/packages.common") $(load_packages "${ROOT_DIR}/profiles/${PACKAGES_PROFILE}")"
 BUILD_LOG="${WORK_DIR}/build.log"
 SKIPPED_PACKAGES=""
 MAX_SKIP_ROUNDS=5
