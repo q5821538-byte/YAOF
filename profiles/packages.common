@@ -1,9 +1,10 @@
 # ============================================================
-# UI
+# UI - Aurora
 # ============================================================
 luci
-luci-theme-vantage
-luci-app-vantage
+luci-mod-dashboard
+luci-theme-aurora
+luci-app-aurora-config
 addition-trans-zh
 
 # ============================================================
@@ -12,8 +13,6 @@ addition-trans-zh
 luci-i18n-base-zh-cn
 luci-i18n-firewall-zh-cn
 luci-i18n-package-manager-zh-cn
-luci-i18n-vantage-zh-cn
-luci-i18n-vantage-theme-zh-cn
 luci-i18n-flowcone-zh-cn
 luci-i18n-sqm-zh-cn
 luci-i18n-arpbind-zh-cn
@@ -81,22 +80,30 @@ sing-box
 haproxy
 geoview
 
+# ============================================================
 # Shadowsocks Rust
+# ============================================================
 shadowsocks-rust-sslocal
 shadowsocks-rust-ssserver
 
+# ============================================================
 # ShadowsocksR
+# ============================================================
 shadowsocksr-libev-ssr-local
 shadowsocksr-libev-ssr-redir
 shadowsocksr-libev-ssr-server
 
+# ============================================================
 # Proxy Plugins
+# ============================================================
 simple-obfs-client
 v2ray-plugin
 xray-plugin
 shadow-tls
 
+# ============================================================
 # Optional Proxy Protocols
+# ============================================================
 hysteria
 naiveproxy
 
